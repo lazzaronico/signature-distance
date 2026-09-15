@@ -1,0 +1,10 @@
+# Python 3.13; versions used for the paper experiments.
+numpy==2.5.3
+scipy==1.18.1
+torch==2.14.0
+pandas==3.0.5
+scikit-learn==1.9.0
+matplotlib==3.11.1
+seaborn==0.13.2
+igraph==1.0.0
+leidenalg==0.12.0

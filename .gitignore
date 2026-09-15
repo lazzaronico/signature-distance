@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+build/
+dist/
+.DS_Store
+# Inputs and new run outputs are supplied or curated separately.
+data/
+outputs/
+results/
+checkpoints/
+*.pt
+*.pth

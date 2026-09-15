@@ -1,0 +1,35 @@
+cff-version: 1.2.0
+message: "Please cite this software release and the associated paper when using Signature Distance."
+type: software
+title: "Signature Distance"
+version: 0.2.1
+date-released: 2026-09-15
+license: MIT
+repository-code: "https://github.com/lazzaronico/signature-distance"
+url: "https://github.com/lazzaronico/signature-distance/releases/tag/v0.2.1"
+authors:
+  - family-names: Lazzaro
+    given-names: Nicolò
+references:
+  - type: article
+    title: "Signature Distance: Generalizing Energy Statistics"
+    doi: "10.1101/2024.10.23.619602"
+    authors:
+      - family-names: Lazzaro
+        given-names: Nicolò
+      - family-names: Marchesi
+        given-names: Raffaele
+      - family-names: Leonardi
+        given-names: Gianluca
+      - family-names: Tessadori
+        given-names: Jacopo
+      - family-names: Chierici
+        given-names: Marco
+      - family-names: Moroni
+        given-names: Monica
+      - family-names: Sales
+        given-names: Gabriele
+      - family-names: Tebaldi
+        given-names: Toma
+      - family-names: Jurman
+        given-names: Giuseppe
