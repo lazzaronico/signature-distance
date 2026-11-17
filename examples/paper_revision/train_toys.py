@@ -23,14 +23,14 @@ def sine(n=2000,seed=42):
 
 
 def train(a):
-    torch.set_num_threads(a.threads);torch.manual_seed(a.seed);rng=np.random.default_rng(a.seed+100);out=a.out/f'{a.task}_{a.method.lower()}_seed{a.seed}';out.mkdir(parents=True,exist_ok=True)
+    torch.set_num_threads(a.threads);torch.manual_seed(a.seed);rng=np.random.default_rng(a.seed+100);out=a.out/f"{a.task}_{a.method.lower()}{'_rooted' if a.rooted else ''}_seed{a.seed}";out.mkdir(parents=True,exist_ok=True)
     if (out/'result.json').exists():return
     if a.task=='circles':
         raw,labels=circles();mu=raw.mean(0);sd=raw.std(0);real=(raw-mu)/sd;model=FICGenerator(noise_dim=2);lr=.001;steps=a.steps or 10000
     else:
         real=sine();model=SineMLP();lr=3e-4;steps=a.steps or 7000
     bw=float(np.median(pdist(real[np.random.default_rng(7741).choice(len(real),min(1024,len(real)),replace=False)])))
-    config={'task':a.task,'method':a.method,'seed':a.seed,'steps':steps,'batch':256,'lr':lr,'bandwidth':bw,'loss_multiplier':SCALES[a.method],
+    config={'task':a.task,'method':a.method,'rooted':a.rooted,'seed':a.seed,'steps':steps,'batch':256,'lr':lr,'bandwidth':bw,'loss_multiplier':SCALES[a.method],
       'data_seed':7 if a.task=='circles' else 42,'torch':str(torch.__version__),'sources':{p.name:digest(p) for p in [Path(__file__),Path(__file__).with_name('common.py'),Path(__file__).resolve().parents[2]/'sigdist/losses.py',Path(__file__).resolve().parents[2]/'sigdist/generators.py']}}
     if (out/'config.json').exists() and json.loads((out/'config.json').read_text())!=config:raise ValueError('Changed resume configuration')
     save_json(out/'config.json',config);opt=torch.optim.Adam(model.parameters(),lr=lr);begin=time.monotonic();start=0
@@ -44,6 +44,7 @@ def train(a):
             if (step-1)%7==0:order=rng.permutation(len(real));inputs=torch.stack([torch.from_numpy(real[:,0]),torch.randn(len(real))],1)
             ids=order[((step-1)%7)*256:((step-1)%7+1)*256];target=torch.from_numpy(real[ids]);pred=model(inputs[ids])
         loss=objective(pred,target,a.method,bw)
+        if a.rooted:loss=loss.clamp_min(1e-12).sqrt()
         if not torch.isfinite(loss):raise RuntimeError('Nonfinite objective')
         opt.zero_grad();loss.backward();opt.step()
         interval=500 if a.task=='circles' else 700
@@ -63,8 +64,11 @@ def train(a):
             residual=generated[:,1]-np.sin(generated[:,0]);extra={'residual_sd_narrow':float(residual[generated[:,0]<np.pi].std()),'residual_sd_wide':float(residual[generated[:,0]>=np.pi].std()),'out_of_domain_fraction':float(((generated[:,0]<0)|(generated[:,0]>2*np.pi)).mean())}
     # Same balanced 2,000-point pooled evaluation for each method.
     ix=np.random.default_rng(333).permutation(len(truth))[:2000]
-    result={'task':a.task,'method':a.method,'seed':a.seed,'steps':steps,'independent':independent_metrics(truth[ix],generated[ix]),'real_real':independent_metrics(truth[ix],control[ix]),**extra}
+    result={'task':a.task,'method':a.method,'rooted':a.rooted,'seed':a.seed,'steps':steps,'independent':independent_metrics(truth[ix],generated[ix]),'real_real':independent_metrics(truth[ix],control[ix]),**extra}
     np.savez_compressed(out/'samples.npz',real=real,truth=truth,generated=generated);save_json(out/'result.json',result)
 
 if __name__=='__main__':
-    p=argparse.ArgumentParser();p.add_argument('--task',choices=['circles','sine'],required=True);p.add_argument('--method',choices=TOY_METHODS,required=True);p.add_argument('--seed',type=int,required=True);p.add_argument('--out',type=Path,required=True);p.add_argument('--threads',type=int,default=1);p.add_argument('--steps',type=int);train(p.parse_args())
+    p=argparse.ArgumentParser();p.add_argument('--task',choices=['circles','sine'],required=True);p.add_argument('--method',choices=TOY_METHODS,required=True);p.add_argument('--seed',type=int,required=True);p.add_argument('--out',type=Path,required=True);p.add_argument('--threads',type=int,default=1);p.add_argument('--steps',type=int)
+    p.add_argument('--rooted',action='store_true',help='optimize sqrt(E) or sqrt(S); ED and SD only');a=p.parse_args()
+    if a.rooted and a.method not in ['ED','SD']:p.error('--rooted applies to ED and SD')
+    train(a)

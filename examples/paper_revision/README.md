@@ -64,13 +64,20 @@ done
 for seed in 42 43 44 45 46; do
   for method in MSE ED SD CSD GSD; do
     python examples/paper_revision/train_tcga_fixed.py --data outputs/patient_split --method "$method" --seed "$seed" --out outputs/tcga_glocal --threads 2
-    python examples/paper_revision/train_tcga.py --data outputs/patient_split --method "$method" --mode global --seed "$seed" --out outputs/tcga_global --threads 2
+    python examples/paper_revision/train_tcga_fixed.py --data outputs/patient_split --method "$method" --mode global --seed "$seed" --out outputs/tcga_global --threads 2
   done
   python examples/paper_revision/train_tcga.py --data outputs/patient_split --method MMD --mode glocal --seed "$seed" --out outputs/tcga_mmd --threads 2
 done
+for seed in 42 43 44; do
+  for method in ED SD; do
+    for task in circles sine; do
+      python examples/paper_revision/train_toys.py --task "$task" --method "$method" --rooted --seed "$seed" --out outputs/toys_rooted --threads 1
+    done
+  done
+done
 ```
 
-These commands produce 97 fits. Independent fits can run concurrently with
+These commands produce 109 fits. Independent fits can run concurrently with
 bounded CPU threads. TCGA runners resume checkpoints in the same output folder;
 keep code and configuration unchanged for a resumed run.
 
@@ -79,7 +86,8 @@ keep code and configuration unchanged for a resumed run.
 | Rings (21 fits) | 5×128 ReLU, latent 2 and class input | Adam 1e-3, batch 256, 10,000 updates | Raw E/S, CSD/GSD, MSE, MMD² or sliced W₁ |
 | Sine (21 fits) | 2×128 GELU, two inputs and outputs | Adam 3e-4, 1,000 epochs × 7 full batches | Same seven objectives |
 | Main glocal TCGA (25 fits) | 5×512 LayerNorm/leaky-ReLU, latent 32, 24 labels | Adam 1e-3, batch 256, at most 100,000 updates | Rooted ED/SD, CSD/GSD or MSE; fixed validation |
-| Global-only TCGA (25 fits) | Same generator | Same optimizer and maximum budget | Raw E/S, CSD/GSD or MSE; stochastic validation |
+| Rooted synthetic repeat (12 fits) | As rings and sine | As rings and sine | Rooted ED/SD |
+| Global-only TCGA (25 fits) | Same generator | Same optimizer and maximum budget | As the main comparison, without per-tissue terms |
 | Glocal MMD (5 fits) | Same generator | Same optimizer and maximum budget | MMD²; stochastic validation |
 | Synthetic-trained classifier | 3×256 LayerNorm/ReLU | Adam 1e-3, at most 500 epochs, patience 50 | Cross-entropy |
 
@@ -87,9 +95,12 @@ No compensating objective multipliers are used. In the main glocal comparison,
 ED and SD are rooted within each global/local term, then averaged. Four fixed
 validation batches of 256 points and latent vectors are shared across losses
 within each seed, evaluated every 25 updates with patience 200 checks. The
-global-only and additional MMD comparisons use fresh validation points/noise
-every five updates and patience 1,000 checks. Their stopping rules therefore
-differ from the main comparison.
+global-only control uses the same objectives, seeds and validation batches and
+omits the per-tissue terms. The additional MMD comparison uses fresh validation
+points/noise every five updates and patience 1,000 checks; its stopping rule
+therefore differs from the main comparison. On the synthetic tasks ED and SD
+optimize raw E and S; the rooted repeat gives the same independent measures
+within the variation across runs.
 
 MMD bandwidth is fixed from at most 1,024 fitting observations. The synthetic
 sliced-W₁ loss uses 128 normalized Gaussian directions (seed 8273). Evaluation
@@ -116,18 +127,24 @@ uses full-dimensional optimal assignment and compares interpolants with the
 destination. Each curve is divided by its own starting value and reaches zero
 at the destination. Its five-method supplement uses the same construction.
 The separate held-out interpolation analysis uses 20 four-way patient-disjoint
-partitions, 200 points per set, and a real–real control.
+partitions, 200 points per set, and a real–real control; its energy and
+signature ratios are rooted, as in the main interpolation figure.
 
 Geometry uses one specimen per patient, the 256 most variable genes, a union
 symmetric 10-neighbour graph and Leiden resolution 1. The largest cluster has
 931 patients. This full-cohort feature/cluster selection is descriptive.
-Expansion uses three partitions of 310, five bootstrap seed populations and
-31 k-means initial centroids. Each trajectory runs 500 steps with step size
-0.1, noise 0.1, covariance regularization 1e-6 I and trace normalization.
-Updates use chunks of at most 256 generated points; stopping evaluates whole
-populations. For each method the display selects the bootstrap with the lowest
-validation distance at its criterion-selected step. Test distances do not
-select the display, and generated points are not removed from it.
+Expansion uses three partitions of 310: a seed set that guides the update, a
+validation set that selects the stopping step and a held-out set that verifies
+it. Five bootstrap seed populations are each initialized from 31 k-means
+centroids. Each trajectory runs 1,000 steps with step size 0.1, noise 0.1,
+covariance regularization 1e-6 I and trace normalization. The guidance is the
+gradient of raw E, S or S + C on the complete population, multiplied by the
+population size so that each point receives the gradient of its own term; a
+fourth chain has no guidance. The chains of a bootstrap share their initial
+population and noise draws. Each chain stops at the multiple of 25 steps with
+the smallest distance to the validation set in the measure of its guidance.
+The figure displays bootstrap 0 at its selected step. Held-out distances do not
+select anything, and generated points are not removed.
 
 ## Recorded results and figure mapping
 

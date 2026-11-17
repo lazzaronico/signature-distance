@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from examples.paper_revision.common import save_json
 
-GROUPS={'toys':42,'tcga_glocal':25,'tcga_mmd':5,'tcga_global':25,'expansion':15}
+GROUPS={'toys':42,'toys_rooted':12,'tcga_glocal':25,'tcga_mmd':5,'tcga_global':25,'expansion':20}
 METHODS=['MSE','ED','SD','CSD','GSD'];COLORS=['#888888','#4a90d9','#e85d4a','#9b59b6','#e67e22']
 
 
@@ -39,7 +39,7 @@ def main(a):
     tables={key:frame(rows) for key,rows in groups.items()}
     for key,df in tables.items():
         df.to_csv(a.out/f'{key}_individual.csv',index=False)
-        keys=['task','method'] if key=='toys' else ['method']
+        keys=['task','method'] if key.startswith('toys') else ['method']
         numeric=[c for c in df.select_dtypes(include='number') if c not in ['seed','bootstrap','n','k']]
         df.groupby(keys,sort=False)[numeric].agg(['mean','std']).to_csv(a.out/f'{key}_summary.csv')
     df=tables['tcga_glocal'];summary={}

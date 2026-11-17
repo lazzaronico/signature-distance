@@ -67,13 +67,15 @@ def statistics(a):
 def geometry(a):
     manifest=pd.read_csv(a.work/'patient_split/sample_manifest.csv')
     manifest.groupby(['cohort','tissue_type']).size().rename('retained_samples').reset_index().to_csv(a.out/'cohort_label_mapping.csv',index=False)
-    z=np.load(a.work/'geometry/geometry.npz');v=np.load(a.work/'geometry/interpolation.npz');cfg=json.loads((a.work/'geometry/configuration.json').read_text());ratio=v['values']/v['real_real'][:,None,:]
-    individual=[{'partition':rep,'alpha':alpha,'metric':name,'score':v['values'][rep,j,i],'real_real':v['real_real'][rep,i],'ratio':ratio[rep,j,i]} for rep in range(len(ratio)) for j,alpha in enumerate(v['alpha']) for i,name in enumerate(NAMES)]
+    z=np.load(a.work/'geometry/geometry.npz');v=np.load(a.work/'geometry/interpolation.npz');cfg=json.loads((a.work/'geometry/configuration.json').read_text());values=v['values'].copy();real_real=v['real_real'].copy()
+    # Energy and signature columns are shown on the rooted scale (d_E and SD), as in the main interpolation figure.
+    values[:,:,:2]=np.sqrt(np.clip(values[:,:,:2],0,None));real_real[:,:2]=np.sqrt(np.clip(real_real[:,:2],0,None));ratio=values/real_real[:,None,:];titles=['ED','SD']+list(DISPLAY[2:])
+    individual=[{'partition':rep,'alpha':alpha,'metric':name,'score':values[rep,j,i],'real_real':real_real[rep,i],'ratio':ratio[rep,j,i]} for rep in range(len(ratio)) for j,alpha in enumerate(v['alpha']) for i,name in enumerate(NAMES)]
     pd.DataFrame(individual).to_csv(a.out/'interpolation_individual_partitions.csv',index=False)
     fig,axes=plt.subplots(1,5,figsize=(7.5,2.8))
     rows=[]
     for i,name in enumerate(NAMES):
-        q=ratio[:,:,i];m=q.mean(0);sd=q.std(0,ddof=1);ax=axes[i];ax.plot(v['alpha'],m,c=SC[i]);ax.fill_between(v['alpha'],m-sd,m+sd,color=SC[i],alpha=.2);ax.axhline(1,color='#777',ls=':');ax.set_title(DISPLAY[i]);ax.set_xlabel('Interpolation α');
+        q=ratio[:,:,i];m=q.mean(0);sd=q.std(0,ddof=1);ax=axes[i];ax.plot(v['alpha'],m,c=SC[i]);ax.fill_between(v['alpha'],m-sd,m+sd,color=SC[i],alpha=.2);ax.axhline(1,color='#777',ls=':');ax.set_title(titles[i]);ax.set_xlabel('Interpolation α');
         if i==0:ax.set_ylabel('Score / real–real score')
         for j,t in enumerate(v['alpha']):rows.append({'metric':name,'alpha':t,'mean_ratio':m[j],'partition_sd':sd[j]})
     fig.tight_layout();save(fig,a.out,'fig04_interpolation');pd.DataFrame(rows).to_csv(a.out/'interpolation_summary.csv',index=False)

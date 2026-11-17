@@ -99,114 +99,41 @@ def sine(work,out,methods,filename):
     plt.close(fig)
 
 
-def expansion(work,out):
-    style();FIGDIR=str(out);out.mkdir(parents=True,exist_ok=True);SEED=42
-    COL_SD='#e85d4a';COL_ED='#4a90d9';COL_CSD='#9b59b6';GUIDANCES=['ed','sd','csd'];boot_res={}
-    for m in GUIDANCES:
-        boot_res[m]=[]
+def expansion(work,out,show=0):
+    """Traces of all five bootstraps and the displayed bootstrap at its validation-selected step."""
+    style();out.mkdir(parents=True,exist_ok=True)
+    sns.set_style("whitegrid");plt.rcParams.update({"figure.dpi":150,"font.size":11,"savefig.bbox":"tight"})
+    arms=[("none","No guidance","#4d4d4d"),("ed","ED-guided","#4a90d9"),("sd","SD-guided","#e85d4a"),("csd","CSD-guided","#9b59b6")]
+    z=np.load(work/"geometry/geometry.npz");cluster=z["x"][z["labels"]==int(z["largest"])]
+    pca=PCA(n_components=2,random_state=42).fit(cluster);cluster_2d=pca.transform(cluster)
+    fig,axes=plt.subplots(3,4,figsize=(22,15))
+    for col,(key,title,color) in enumerate(arms):
         for b in range(5):
-            z=np.load(work/'expansion'/f'{m}_bootstrap{b}.npz');tr=z['trace'];st=int(z['selected_step'])
-            boot_res[m].append({'results':dict(step=np.arange(len(tr)),ed_to_B=tr[:,2],sd_to_B=tr[:,3],ed_to_C=tr[:,4],sd_to_C=tr[:,5]),'best_ed':st,'best_sd':st,'snapshots':{st:z['selected']},'initial':z['initial']})
-    z=np.load(work/'geometry/geometry.npz');X_c=z['x'][z['labels']==int(z['largest'])]
-    # -- Figure: 2x3 --
-    sns.set_style("whitegrid")
-    plt.rcParams.update({"figure.dpi": 150, "font.size": 11,
-                          "savefig.bbox": "tight"})
-
-    pca = PCA(n_components=2, random_state=SEED)
-    pca.fit(X_c)
-    X_c_2d = pca.transform(X_c)
-    p5, p95 = np.percentile(X_c_2d, [2, 98], axis=0)
-    margin  = (p95 - p5) * 0.15
-    xlim = (p5[0]-margin[0], p95[0]+margin[0])
-    ylim = (p5[1]-margin[1], p95[1]+margin[1])
-
-    fig, axes = plt.subplots(2, 3, figsize=(17, 10))
-
-    col_cfg = {
-        "sd":  dict(key_B="sd_to_B", key_C="sd_to_C",
-                    key_stop="best_sd", metric="SD",  color=COL_SD),
-        "ed":  dict(key_B="ed_to_B", key_C="ed_to_C",
-                    key_stop="best_ed", metric="ED",  color=COL_ED),
-        # CSD guidance evaluated with SD metric (canonical evaluator)
-        "csd": dict(key_B="sd_to_B", key_C="sd_to_C",
-                    key_stop="best_sd", metric="SD",  color=COL_CSD),
-    }
+            run=np.load(work/"expansion"/f"{key}_bootstrap{b}.npz");trace=run["trace"];steps=np.arange(len(trace));main=b==show
+            # trace columns: (d_E, SD, CSD) to the bootstrap seed, to validation B and to held-out C
+            for row,(to_b,to_c,label) in enumerate([(3,6,"ED"),(4,7,"SD")]):
+                ax=axes[row,col]
+                ax.plot(steps,trace[:,to_b],"-",color=color,lw=2. if main else .8,alpha=1 if main else .15,label=f"{label}(pop, B)" if main else None)
+                ax.plot(steps,trace[:,to_c],"--",color=color,lw=2. if main else .8,alpha=.7 if main else .10,label=f"{label}(pop, C)" if main else None)
+            if main:shown=run;stop=int(run["selected_step"]);shown_trace=trace
+        b_to_c=[float(np.sqrt(max(0.,v))) for v in _raw_reference(shown["b"],shown["c"])]
+        for row,(label,limits) in enumerate([("Energy Distance",(.5,2.5)),("Signature Distance",(1.,5.))]):
+            ax=axes[row,col];ax.axhline(b_to_c[row],color="black",ls=":",lw=1.2,alpha=.75,label="real–real (B, C)")
+            ax.axvline(stop,color="black",ls="--",lw=1.5,alpha=.75,label=f"stop={stop} (b={show})")
+            ax.set_xlabel("Step");ax.set_ylabel(label);ax.set_ylim(limits);ax.legend(fontsize=8,title=title,title_fontsize=9,loc="upper left")
+        ax=axes[2,col];population=shown["selected"]
+        ax.scatter(*cluster_2d.T,c="grey",s=4,alpha=.15,linewidths=0,zorder=1,label="Original")
+        ax.scatter(*pca.transform(population).T,c=color,s=10,alpha=.45,linewidths=0,zorder=2,label=f"Expanded, step {stop} ({len(population)} pts)")
+        ax.scatter(*np.unique(pca.transform(shown["initial"]),axis=0).T,c="black",s=20,alpha=.8,linewidths=.5,edgecolors="white",zorder=5,label="Initial centroids")
+        ax.text(.03,.03,f"ED(C)={shown_trace[stop,6]:.3f}\nSD(C)={shown_trace[stop,7]:.3f}",transform=ax.transAxes,va="bottom",fontsize=8,fontfamily="monospace",bbox=dict(facecolor="white",alpha=.85,edgecolor="none"))
+        ax.set_xlabel("PC1");ax.set_ylabel("PC2");ax.set_xlim(-45,45);ax.set_ylim(-45,45);ax.legend(fontsize=7,title=title,title_fontsize=9,loc="upper left")
+    fig.tight_layout();path=out/"fig07c_langevin_csd.png"
+    fig.savefig(path);fig.savefig(path.with_suffix(".pdf"));plt.close(fig);print(f"Saved: {path}",flush=True)
 
 
-
-    best_runs = {}
-    for g, cfg in col_cfg.items():
-        runs   = boot_res[g]
-        scores = [r["results"][cfg["key_B"]][r[cfg["key_stop"]]] for r in runs]
-        b_best = int(np.argmin(scores))
-        best_runs[g] = (b_best, runs[b_best])
-        print(f"  {g.upper()} best: b={b_best}  "
-              f"{cfg['metric']}(B)={scores[b_best]:.4f}  "
-              f"stop={runs[b_best][cfg['key_stop']]}", flush=True)
-
-    all_display = np.concatenate([X_c_2d]+[pca.transform(r['snapshots'][r[col_cfg[g]['key_stop']]]) for g,(_,r) in best_runs.items()])
-    lo,hi=all_display.min(0),all_display.max(0);margin=(hi-lo)*.05
-    xlim=(lo[0]-margin[0],hi[0]+margin[0]);ylim=(lo[1]-margin[1],hi[1]+margin[1])
-
-    # Row 0: traces
-    steps = boot_res["sd"][0]["results"]["step"]
-    for col, g in enumerate(GUIDANCES):
-        cfg = col_cfg[g]; b_best, r_best = best_runs[g]; ax = axes[0, col]
-        for b, r in enumerate(boot_res[g]):
-            if b == b_best: continue
-            ax.plot(steps, r["results"][cfg["key_B"]], "-",
-                    color=cfg["color"], lw=0.8, alpha=0.15)
-            ax.plot(steps, r["results"][cfg["key_C"]], "--",
-                    color=cfg["color"], lw=0.8, alpha=0.10)
-        ax.plot(steps, r_best["results"][cfg["key_B"]], "-",
-                color=cfg["color"], lw=2.0,
-                label=f"{cfg['metric']}(pop, B)")
-        ax.plot(steps, r_best["results"][cfg["key_C"]], "--",
-                color=cfg["color"], lw=2.0, alpha=0.7,
-                label=f"{cfg['metric']}(pop, C)")
-        vline_step = r_best[cfg["key_stop"]]
-        ax.axvline(vline_step, color="black", ls="--", lw=1.5, alpha=0.75,
-                   label=f"stop={vline_step} (b={b_best})")
-        ax.set_xlabel("Step")
-        label_g = {"sd": "SD", "ed": "ED", "csd": "CSD"}[g]
-        ax.set_ylabel(f"{'Signature' if g in ('sd','csd') else 'Energy'} Distance")
-        ax.legend(fontsize=8, title=f"{label_g}-guided", title_fontsize=9)
-
-    # Row 1: PCA
-    for col, g in enumerate(GUIDANCES):
-        cfg = col_cfg[g]; b_best, r_best = best_runs[g]; ax = axes[1, col]
-        vline_step = r_best[cfg["key_stop"]]
-        pop_b      = r_best["snapshots"][vline_step]
-        pop_clean  = pop_b
-        n_out      = 0
-        score_B    = r_best["results"][cfg["key_B"]][vline_step]
-        score_C    = r_best["results"][cfg["key_C"]][vline_step]
-        print(f"  {g.upper()} PCA: b={b_best} step={vline_step}  "
-              f"B={score_B:.4f}  C={score_C:.4f}  "
-              f"pts={len(pop_clean)}  out={n_out}", flush=True)
-        label_g = {"sd": "SD", "ed": "ED", "csd": "CSD"}[g]
-        unique_cents = np.unique(pca.transform(r_best['initial']),axis=0)
-        pop_2d = pca.transform(pop_clean)
-        ax.scatter(X_c_2d[:, 0], X_c_2d[:, 1],
-                   c="grey", s=4, alpha=0.15, linewidths=0, zorder=1,
-                   label="Original")
-        ax.scatter(pop_2d[:, 0], pop_2d[:, 1],
-                   c=cfg["color"], s=10, alpha=0.45, linewidths=0, zorder=2,
-                   label=f"Expanded ({len(pop_clean)} pts)")
-        ax.scatter(unique_cents[:, 0], unique_cents[:, 1],
-                   c="black", s=20, alpha=0.8,
-                   linewidths=0.5, edgecolors="white", zorder=5,
-                   label="Initial centroids")
-        ax.text(0.03, 0.03,
-                f"{cfg['metric']}(B)={score_B:.3f}\n{cfg['metric']}(C)={score_C:.3f}",
-                transform=ax.transAxes, va="bottom", fontsize=8, fontfamily="monospace",
-                bbox=dict(facecolor="white", alpha=0.85, edgecolor="none"))
-        ax.set_xlabel("PC1"); ax.set_ylabel("PC2")
-        ax.set_xlim(xlim); ax.set_ylim(ylim)
-        ax.legend(fontsize=7, title=f"{label_g}-guided", title_fontsize=9)
-
-    fig.tight_layout()
-    out_path = f"{FIGDIR}/fig07c_langevin_csd.png"
-    fig.savefig(out_path);fig.savefig(Path(out_path).with_suffix(".pdf"));plt.close(fig)
-    print(f"\nSaved: {out_path}", flush=True)
+def _raw_reference(b,c):
+    """Raw energy and signature statistics between the validation and held-out sets."""
+    import torch
+    from sigdist import losses
+    x,y=torch.from_numpy(np.asarray(b)),torch.from_numpy(np.asarray(c))
+    return float(losses.energy(x,y)),float(losses.sd(x,y))

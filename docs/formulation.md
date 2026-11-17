@@ -84,9 +84,10 @@ Choosing Q=(μ+ν)/2 anew for each pair makes 2A_Q=S and loses this guarantee.
   constant-removal argument. Off-diagonal n(n−1) estimation is a different loss.
 
 CSD/GSD are additional objectives, not established Hilbert or metric constructions.
-The synthetic, global-only TCGA and expansion experiments optimize the raw E and S
-or CSD/GSD directly. The main glocal TCGA experiment uses sqrt(E) and sqrt(S)
-within each global/local term before averaging. The [experiment guide](../examples/paper_revision/README.md)
+The synthetic experiments optimize the raw E and S or CSD/GSD directly, and the
+expansion experiment uses the raw E, S and S + C. The glocal TCGA experiment and
+its global-only control use sqrt(E) and sqrt(S) within each global/local term
+before averaging. The [experiment guide](../examples/paper_revision/README.md)
 specifies the validation protocols and comparator settings.
 
 `mode="simplified"` is retained as a legacy alias of the full signature mode.

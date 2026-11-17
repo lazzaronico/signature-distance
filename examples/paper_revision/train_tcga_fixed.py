@@ -150,5 +150,5 @@ def train(args):
 if __name__=='__main__':
     p=argparse.ArgumentParser();p.add_argument('--data',type=Path,required=True);p.add_argument('--out',type=Path,required=True)
     p.add_argument('--method',choices=METHODS,required=True);p.add_argument('--seed',type=int,required=True);p.add_argument('--threads',type=int,default=2)
-    p.add_argument('--mode',choices=['glocal'],default='glocal');p.add_argument('--max-steps',type=int,default=100000);p.add_argument('--classifier-epochs',type=int,default=500)
+    p.add_argument('--mode',choices=['glocal','global'],default='glocal');p.add_argument('--max-steps',type=int,default=100000);p.add_argument('--classifier-epochs',type=int,default=500)
     train(p.parse_args())
